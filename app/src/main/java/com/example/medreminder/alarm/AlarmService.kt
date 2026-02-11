@@ -62,7 +62,8 @@ class AlarmService : Service() {
         startVibration()
 
         // Abrir Activity fullscreen
-        launchAlarmActivity(alarmId, medicationName, hour, minute)
+        val medicationId = intent?.getLongExtra("MEDICATION_ID", -1) ?: -1
+        launchAlarmActivity(alarmId, medicationId, medicationName, hour, minute)
 
         // Reagendar para amanhã
         rescheduleForTomorrow(alarmId)
@@ -169,9 +170,10 @@ class AlarmService : Service() {
         }
     }
 
-    private fun launchAlarmActivity(alarmId: Long, medicationName: String, hour: Int, minute: Int) {
+    private fun launchAlarmActivity(alarmId: Long, medicationId: Long, medicationName: String, hour: Int, minute: Int) {
         val intent = Intent(this, AlarmActivity::class.java).apply {
             putExtra("ALARM_ID", alarmId)
+            putExtra("MEDICATION_ID", medicationId)
             putExtra("MEDICATION_NAME", medicationName)
             putExtra("HOUR", hour)
             putExtra("MINUTE", minute)

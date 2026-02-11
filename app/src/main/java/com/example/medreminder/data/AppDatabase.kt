@@ -5,19 +5,22 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.example.medreminder.data.dao.AlarmScheduleDao
+import com.example.medreminder.data.dao.DoseHistoryDao
 import com.example.medreminder.data.dao.MedicationDao
 import com.example.medreminder.data.entity.AlarmSchedule
+import com.example.medreminder.data.entity.DoseHistory
 import com.example.medreminder.data.entity.Medication
 
 @Database(
-    entities = [Medication::class, AlarmSchedule::class],
-    version = 1,
+    entities = [Medication::class, AlarmSchedule::class, DoseHistory::class],
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun medicationDao(): MedicationDao
     abstract fun alarmScheduleDao(): AlarmScheduleDao
+    abstract fun doseHistoryDao(): DoseHistoryDao
 
     companion object {
         @Volatile
@@ -29,7 +32,9 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "med_reminder_db"
-                ).build()
+                )
+                    .fallbackToDestructiveMigration()
+                    .build()
                 INSTANCE = instance
                 instance
             }

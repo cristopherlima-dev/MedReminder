@@ -13,17 +13,21 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.example.medreminder.ui.screen.AlarmScheduleScreen
+import com.example.medreminder.ui.screen.HistoryScreen
 import com.example.medreminder.ui.screen.MedicationFormScreen
 import com.example.medreminder.ui.screen.MedicationListScreen
 import com.example.medreminder.ui.screen.PermissionScreen
 import com.example.medreminder.viewmodel.AlarmViewModel
+import com.example.medreminder.viewmodel.HistoryViewModel
 import com.example.medreminder.viewmodel.MedicationViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun NavGraph(
     navController: NavHostController,
     medicationViewModel: MedicationViewModel,
-    alarmViewModel: AlarmViewModel
+    alarmViewModel: AlarmViewModel,
+    historyViewModel: HistoryViewModel
 ) {
     val context = LocalContext.current
     val medicationsWithAlarms by medicationViewModel.medicationsWithAlarms.collectAsState()
@@ -53,9 +57,8 @@ fun NavGraph(
                 onAddClick = { navController.navigate("medication_form/0") },
                 onMedicationClick = { id -> navController.navigate("alarm_schedule/$id") },
                 onDeleteClick = { item -> medicationViewModel.deleteMedication(item.medication) },
-                onSettingsClick = {
-                    navController.navigate("permissions")
-                }
+                onSettingsClick = { navController.navigate("permissions") },
+                onHistoryClick = { navController.navigate("history") }
             )
         }
 
@@ -96,6 +99,26 @@ fun NavGraph(
                 onDeleteAlarm = { alarm -> alarmViewModel.deleteAlarm(alarm) },
                 onToggleAlarm = { alarm -> alarmViewModel.toggleAlarm(alarm) },
                 onEditMedication = { id -> navController.navigate("medication_form/$id") }
+            )
+        }
+
+        // Tela 4: Histórico de doses
+        composable("history") {
+            val historyList by historyViewModel.allHistory.collectAsState(initial = emptyList())
+            var filteredList by remember { mutableStateOf<List<com.example.medreminder.data.entity.DoseHistory>?>(null) }
+
+            HistoryScreen(
+                historyList = filteredList ?: historyList,
+                onNavigateBack = { navController.popBackStack() },
+                onDateSelected = { year, month, day ->
+                    filteredList = null // Reset para mostrar loading
+                    // Coletar dados filtrados
+                    kotlinx.coroutines.MainScope().launch {
+                        historyViewModel.getHistoryByDate(year, month, day).collect { list ->
+                            filteredList = list
+                        }
+                    }
+                }
             )
         }
     }

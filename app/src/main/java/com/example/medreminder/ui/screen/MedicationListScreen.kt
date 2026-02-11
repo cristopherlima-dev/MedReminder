@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Settings
@@ -29,7 +30,8 @@ fun MedicationListScreen(
     onAddClick: () -> Unit,
     onMedicationClick: (Long) -> Unit,
     onDeleteClick: (MedicationWithAlarms) -> Unit,
-    onSettingsClick: () -> Unit = {}
+    onSettingsClick: () -> Unit = {},
+    onHistoryClick: () -> Unit = {}
 ) {
     var showDeleteDialog by remember { mutableStateOf<MedicationWithAlarms?>(null) }
 
@@ -38,6 +40,12 @@ fun MedicationListScreen(
             TopAppBar(
                 title = { Text("💊 MedReminder") },
                 actions = {
+                    IconButton(onClick = onHistoryClick) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.List,
+                            contentDescription = "Histórico"
+                        )
+                    }
                     IconButton(onClick = onSettingsClick) {
                         Icon(Icons.Default.Settings, contentDescription = "Configurações")
                     }
@@ -257,10 +265,9 @@ private fun findNextAlarm(medicationsWithAlarms: List<MedicationWithAlarms>): Tr
         for (alarm in item.alarms) {
             if (!alarm.isEnabled) continue
 
-            // Calcular diferença em minutos até o alarme
             var diffMinutes = (alarm.hour * 60 + alarm.minute) - (currentHour * 60 + currentMinute)
             if (diffMinutes <= 0) {
-                diffMinutes += 24 * 60 // Amanhã
+                diffMinutes += 24 * 60
             }
 
             if (diffMinutes < bestDiff) {

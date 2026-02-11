@@ -16,14 +16,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.medreminder.data.AppDatabase
+import com.example.medreminder.data.entity.DoseHistory
 import com.example.medreminder.ui.theme.MedReminderTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class AlarmActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Garantir que a tela liga e aparece sobre o lock screen
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -38,9 +42,10 @@ class AlarmActivity : ComponentActivity() {
             )
         }
 
-        // Manter tela ligada
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
+        val alarmId = intent.getLongExtra("ALARM_ID", -1)
+        val medicationId = intent.getLongExtra("MEDICATION_ID", -1)
         val medicationName = intent.getStringExtra("MEDICATION_NAME") ?: "Medicamento"
         val hour = intent.getIntExtra("HOUR", 0)
         val minute = intent.getIntExtra("MINUTE", 0)
@@ -51,23 +56,41 @@ class AlarmActivity : ComponentActivity() {
                     medicationName = medicationName,
                     hour = hour,
                     minute = minute,
-                    onDismiss = { dismissAlarm() }
+                    onDismiss = {
+                        // Parar som e vibração imediatamente
+                        val serviceIntent = Intent(this@AlarmActivity, AlarmService::class.java)
+                        stopService(serviceIntent)
+
+                        // Gravar no banco e depois fechar
+                        CoroutineScope(Dispatchers.IO).launch {
+                            try {
+                                val db = AppDatabase.getInstance(applicationContext)
+                                db.doseHistoryDao().insert(
+                                    DoseHistory(
+                                        medicationId = medicationId,
+                                        medicationName = medicationName,
+                                        scheduledHour = hour,
+                                        scheduledMinute = minute,
+                                        status = "TAKEN"
+                                    )
+                                )
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            } finally {
+                                runOnUiThread { finish() }
+                            }
+                        }
+                    }
                 )
             }
         }
     }
 
-    private fun dismissAlarm() {
-        // Parar o serviço (som e vibração)
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
         val serviceIntent = Intent(this, AlarmService::class.java)
         stopService(serviceIntent)
         finish()
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        // Impedir que o botão voltar feche sem parar o alarme
-        dismissAlarm()
     }
 }
 
@@ -134,7 +157,7 @@ fun AlarmScreen(
                 )
             ) {
                 Text(
-                    text = "OK - Já Tomei!",
+                    text = "✅ Já Tomei!",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
                 )

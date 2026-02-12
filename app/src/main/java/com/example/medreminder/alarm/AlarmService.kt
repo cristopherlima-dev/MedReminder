@@ -17,7 +17,6 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
 import com.example.medreminder.data.AppDatabase
-import com.example.medreminder.data.entity.AlarmSchedule
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -51,19 +50,13 @@ class AlarmService : Service() {
 
         Log.d(TAG, "Service iniciado para: $medicationName às %02d:%02d".format(hour, minute))
 
-        // Criar notificação fullscreen
+        // Criar notificação (necessário para startForeground)
         val notification = createAlarmNotification(medicationName, hour, minute, alarmId)
         startForeground(NOTIFICATION_ID, notification)
 
-        // Tocar som
+        // Tocar som e vibrar (Activity já foi aberta pelo AlarmReceiver)
         startAlarmSound()
-
-        // Vibrar
         startVibration()
-
-        // Abrir Activity fullscreen
-        val medicationId = intent?.getLongExtra("MEDICATION_ID", -1) ?: -1
-        launchAlarmActivity(alarmId, medicationId, medicationName, hour, minute)
 
         // Reagendar para amanhã
         rescheduleForTomorrow(alarmId)
@@ -95,7 +88,6 @@ class AlarmService : Service() {
         minute: Int,
         alarmId: Long
     ): Notification {
-        // Intent para abrir a AlarmActivity ao tocar na notificação
         val fullScreenIntent = Intent(this, AlarmActivity::class.java).apply {
             putExtra("ALARM_ID", alarmId)
             putExtra("MEDICATION_NAME", medicationName)
@@ -160,7 +152,6 @@ class AlarmService : Service() {
             getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         }
 
-        // Padrão: vibra 1s, pausa 0.5s, repete
         val pattern = longArrayOf(0, 1000, 500, 1000, 500, 1000)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             vibrator?.vibrate(VibrationEffect.createWaveform(pattern, 0))

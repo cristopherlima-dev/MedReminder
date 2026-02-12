@@ -21,7 +21,20 @@ class AlarmReceiver : BroadcastReceiver() {
 
         Log.d(TAG, "Alarme recebido: $alarmId - $medicationName às %02d:%02d".format(hour, minute))
 
-        // Iniciar o ForegroundService para tocar som e vibrar
+        // 1. Abrir Activity fullscreen IMEDIATAMENTE (antes do Service)
+        val activityIntent = Intent(context, AlarmActivity::class.java).apply {
+            putExtra("ALARM_ID", alarmId)
+            putExtra("MEDICATION_ID", medicationId)
+            putExtra("MEDICATION_NAME", medicationName)
+            putExtra("HOUR", hour)
+            putExtra("MINUTE", minute)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_NO_USER_ACTION
+        }
+        context.startActivity(activityIntent)
+
+        // 2. Iniciar o ForegroundService para tocar som e vibrar
         val serviceIntent = Intent(context, AlarmService::class.java).apply {
             putExtra("ALARM_ID", alarmId)
             putExtra("MEDICATION_ID", medicationId)

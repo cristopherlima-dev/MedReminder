@@ -4,6 +4,7 @@ import android.app.KeyguardManager
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -24,6 +25,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class AlarmActivity : ComponentActivity() {
+
+    companion object {
+        private const val TAG = "AlarmActivity"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,6 +55,9 @@ class AlarmActivity : ComponentActivity() {
         val hour = intent.getIntExtra("HOUR", 0)
         val minute = intent.getIntExtra("MINUTE", 0)
 
+        Log.d(TAG, "=== AlarmActivity aberta ===")
+        Log.d(TAG, "alarmId=$alarmId, medicationId=$medicationId, name=$medicationName, hour=$hour, minute=$minute")
+
         setContent {
             MedReminderTheme {
                 AlarmScreen(
@@ -64,17 +72,37 @@ class AlarmActivity : ComponentActivity() {
                         // Gravar no banco e depois fechar
                         CoroutineScope(Dispatchers.IO).launch {
                             try {
+                                Log.d(TAG, "Gravando dose: medicationId=$medicationId, name=$medicationName")
+
                                 val db = AppDatabase.getInstance(applicationContext)
-                                db.doseHistoryDao().insert(
-                                    DoseHistory(
-                                        medicationId = medicationId,
-                                        medicationName = medicationName,
-                                        scheduledHour = hour,
-                                        scheduledMinute = minute,
-                                        status = "TAKEN"
+
+                                // Buscar o medicationId real pelo alarmId caso venha -1
+                                var finalMedicationId = medicationId
+                                if (finalMedicationId <= 0 && alarmId > 0) {
+                                    Log.d(TAG, "medicationId inválido, buscando pelo alarmId=$alarmId")
+                                    val alarm = db.alarmScheduleDao().getById(alarmId)
+                                    if (alarm != null) {
+                                        finalMedicationId = alarm.medicationId
+                                        Log.d(TAG, "medicationId encontrado via alarm: $finalMedicationId")
+                                    }
+                                }
+
+                                if (finalMedicationId > 0) {
+                                    val id = db.doseHistoryDao().insert(
+                                        DoseHistory(
+                                            medicationId = finalMedicationId,
+                                            medicationName = medicationName,
+                                            scheduledHour = hour,
+                                            scheduledMinute = minute,
+                                            status = "TAKEN"
+                                        )
                                     )
-                                )
+                                    Log.d(TAG, "Dose gravada com sucesso! id=$id")
+                                } else {
+                                    Log.e(TAG, "ERRO: medicationId inválido mesmo após busca: $finalMedicationId")
+                                }
                             } catch (e: Exception) {
+                                Log.e(TAG, "ERRO ao gravar dose: ${e.message}")
                                 e.printStackTrace()
                             } finally {
                                 runOnUiThread { finish() }

@@ -1,9 +1,16 @@
 package com.example.medreminder.alarm
 
 import android.app.KeyguardManager
+import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.MediaPlayer
+import android.media.RingtoneManager
 import android.os.Build
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.util.Log
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -30,9 +37,13 @@ class AlarmActivity : ComponentActivity() {
         private const val TAG = "AlarmActivity"
     }
 
+    private var mediaPlayer: MediaPlayer? = null
+    private var vibrator: Vibrator? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Configurar para aparecer sobre lock screen
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -58,6 +69,10 @@ class AlarmActivity : ComponentActivity() {
         Log.d(TAG, "=== AlarmActivity aberta ===")
         Log.d(TAG, "alarmId=$alarmId, medicationId=$medicationId, name=$medicationName, hour=$hour, minute=$minute")
 
+        // Iniciar som e vibração IMEDIATAMENTE (antes do Compose inflar)
+        startAlarmSound()
+        startVibration()
+
         setContent {
             MedReminderTheme {
                 AlarmScreen(
@@ -66,6 +81,9 @@ class AlarmActivity : ComponentActivity() {
                     minute = minute,
                     onDismiss = {
                         // Parar som e vibração imediatamente
+                        stopAlarmSoundAndVibration()
+
+                        // Parar o Service também (caso esteja rodando)
                         val serviceIntent = Intent(this@AlarmActivity, AlarmService::class.java)
                         stopService(serviceIntent)
 
@@ -114,8 +132,67 @@ class AlarmActivity : ComponentActivity() {
         }
     }
 
+    private fun startAlarmSound() {
+        try {
+            val alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
+            mediaPlayer = MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                setDataSource(this@AlarmActivity, alarmUri)
+                isLooping = true
+                prepare()
+                start()
+            }
+            Log.d(TAG, "Som do alarme iniciado")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao tocar som: ${e.message}")
+        }
+    }
+
+    private fun startVibration() {
+        vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            vibratorManager.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
+
+        val pattern = longArrayOf(0, 1000, 500, 1000, 500, 1000)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator?.vibrate(VibrationEffect.createWaveform(pattern, 0))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator?.vibrate(pattern, 0)
+        }
+        Log.d(TAG, "Vibração iniciada")
+    }
+
+    private fun stopAlarmSoundAndVibration() {
+        mediaPlayer?.apply {
+            if (isPlaying) stop()
+            release()
+        }
+        mediaPlayer = null
+        vibrator?.cancel()
+        vibrator = null
+        Log.d(TAG, "Som e vibração parados")
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        stopAlarmSoundAndVibration()
+    }
+
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
+        stopAlarmSoundAndVibration()
         val serviceIntent = Intent(this, AlarmService::class.java)
         stopService(serviceIntent)
         finish()

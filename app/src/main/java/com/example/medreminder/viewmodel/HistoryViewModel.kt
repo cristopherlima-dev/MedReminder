@@ -25,4 +25,18 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
         }
         return doseHistoryDao.getByDate(startCal.timeInMillis, endCal.timeInMillis)
     }
+
+    /**
+     * Retorna sonecas pendentes (status SNOOZED com snoozedTo no futuro).
+     */
+    fun getPendingSnoozes(): Flow<List<DoseHistory>> {
+        return doseHistoryDao.getPendingSnoozes(System.currentTimeMillis())
+    }
+
+    /**
+     * Marca uma soneca pendente como TAKEN e cancela o alarme de snooze.
+     */
+    suspend fun confirmSnoozedDose(dose: DoseHistory) {
+        doseHistoryDao.updateStatus(dose.id, "TAKEN", System.currentTimeMillis())
+    }
 }

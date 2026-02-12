@@ -25,5 +25,6 @@ data class DoseHistory(
     val scheduledHour: Int,
     val scheduledMinute: Int,
     val takenAt: Long = System.currentTimeMillis(),
-    val status: String = "TAKEN"  // TAKEN, MISSED, SNOOZED
+    val status: String = "TAKEN",  // TAKEN, MISSED, SNOOZED
+    val snoozedTo: Long? = null    // Timestamp de quando a soneca vai tocar (só para SNOOZED)
 )

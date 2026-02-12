@@ -12,6 +12,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.example.medreminder.alarm.AlarmScheduler
 import com.example.medreminder.ui.screen.AlarmScheduleScreen
 import com.example.medreminder.ui.screen.HistoryScreen
 import com.example.medreminder.ui.screen.MedicationFormScreen
@@ -30,7 +31,9 @@ fun NavGraph(
     historyViewModel: HistoryViewModel
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val medicationsWithAlarms by medicationViewModel.medicationsWithAlarms.collectAsState()
+    val pendingSnoozes by historyViewModel.getPendingSnoozes().collectAsState(initial = emptyList())
 
     val allPermissionsGranted = remember { mutableStateOf(checkAllPermissions(context)) }
 
@@ -54,11 +57,29 @@ fun NavGraph(
         composable("medication_list") {
             MedicationListScreen(
                 medicationsWithAlarms = medicationsWithAlarms,
+                pendingSnoozes = pendingSnoozes,
                 onAddClick = { navController.navigate("medication_form/0") },
                 onMedicationClick = { id -> navController.navigate("alarm_schedule/$id") },
                 onDeleteClick = { item -> medicationViewModel.deleteMedication(item.medication) },
                 onSettingsClick = { navController.navigate("permissions") },
-                onHistoryClick = { navController.navigate("history") }
+                onHistoryClick = { navController.navigate("history") },
+                onConfirmSnooze = { dose ->
+                    scope.launch {
+                        // Marcar como TAKEN
+                        historyViewModel.confirmSnoozedDose(dose)
+
+                        // Cancelar o alarme de snooze agendado
+                        // O request code do snooze é 900000 + alarmId
+                        // Precisamos buscar o alarmId original — usamos o scheduledHour/Minute
+                        // para encontrar o alarme correspondente
+                        val snoozeRequestCode = 900000 + findAlarmIdForDose(
+                            medicationsWithAlarms, dose
+                        ).toInt()
+                        if (snoozeRequestCode > 900000) {
+                            AlarmScheduler.cancelSnooze(context, snoozeRequestCode)
+                        }
+                    }
+                }
             )
         }
 
@@ -111,9 +132,8 @@ fun NavGraph(
                 historyList = filteredList ?: historyList,
                 onNavigateBack = { navController.popBackStack() },
                 onDateSelected = { year, month, day ->
-                    filteredList = null // Reset para mostrar loading
-                    // Coletar dados filtrados
-                    kotlinx.coroutines.MainScope().launch {
+                    filteredList = null
+                    scope.launch {
                         historyViewModel.getHistoryByDate(year, month, day).collect { list ->
                             filteredList = list
                         }
@@ -122,6 +142,25 @@ fun NavGraph(
             )
         }
     }
+}
+
+/**
+ * Encontra o alarmId correspondente a uma dose baseado no medicationId e horário.
+ */
+private fun findAlarmIdForDose(
+    medicationsWithAlarms: List<com.example.medreminder.data.relation.MedicationWithAlarms>,
+    dose: com.example.medreminder.data.entity.DoseHistory
+): Long {
+    for (item in medicationsWithAlarms) {
+        if (item.medication.id == dose.medicationId) {
+            for (alarm in item.alarms) {
+                if (alarm.hour == dose.scheduledHour && alarm.minute == dose.scheduledMinute) {
+                    return alarm.id
+                }
+            }
+        }
+    }
+    return 0
 }
 
 private fun checkAllPermissions(context: Context): Boolean {

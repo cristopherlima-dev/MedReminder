@@ -13,7 +13,7 @@ import com.example.medreminder.data.entity.Medication
 
 @Database(
     entities = [Medication::class, AlarmSchedule::class, DoseHistory::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -33,7 +33,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "med_reminder_db"
                 )
-                    .fallbackToDestructiveMigration()
+                    .fallbackToDestructiveMigration(false)
                     .build()
                 INSTANCE = instance
                 instance

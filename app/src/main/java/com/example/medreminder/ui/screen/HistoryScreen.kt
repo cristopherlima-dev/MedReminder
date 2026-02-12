@@ -174,7 +174,14 @@ fun DoseHistoryCard(dose: DoseHistory) {
     val statusText = when (dose.status) {
         "TAKEN" -> "Tomou"
         "MISSED" -> "Perdeu"
-        "SNOOZED" -> "Adiou"
+        "SNOOZED" -> {
+            if (dose.snoozedTo != null) {
+                val snoozedTime = timeFormat.format(Date(dose.snoozedTo))
+                "Adiou para $snoozedTime"
+            } else {
+                "Adiou"
+            }
+        }
         else -> dose.status
     }
 
@@ -218,7 +225,12 @@ fun DoseHistoryCard(dose: DoseHistory) {
                 Text(
                     text = statusText,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = when (dose.status) {
+                        "TAKEN" -> MaterialTheme.colorScheme.primary
+                        "SNOOZED" -> MaterialTheme.colorScheme.tertiary
+                        "MISSED" -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    }
                 )
             }
         }
@@ -235,7 +247,7 @@ fun HistoryScreenPreview() {
     HistoryScreen(
         historyList = listOf(
             DoseHistory(id = 1, medicationId = 1, medicationName = "Losartana", scheduledHour = 8, scheduledMinute = 0, takenAt = now - 3600000, status = "TAKEN"),
-            DoseHistory(id = 2, medicationId = 2, medicationName = "Vitamina D", scheduledHour = 12, scheduledMinute = 0, takenAt = now - 1800000, status = "TAKEN"),
+            DoseHistory(id = 2, medicationId = 2, medicationName = "Vitamina D", scheduledHour = 12, scheduledMinute = 0, takenAt = now - 1800000, status = "SNOOZED", snoozedTo = now - 1500000),
             DoseHistory(id = 3, medicationId = 1, medicationName = "Losartana", scheduledHour = 20, scheduledMinute = 0, takenAt = now - 86400000, status = "TAKEN"),
             DoseHistory(id = 4, medicationId = 3, medicationName = "Omega 3", scheduledHour = 14, scheduledMinute = 30, takenAt = now - 86400000, status = "MISSED")
         ),

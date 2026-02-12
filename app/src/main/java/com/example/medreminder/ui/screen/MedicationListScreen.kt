@@ -19,19 +19,23 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.medreminder.data.entity.AlarmSchedule
+import com.example.medreminder.data.entity.DoseHistory
 import com.example.medreminder.data.entity.Medication
 import com.example.medreminder.data.relation.MedicationWithAlarms
-import java.util.Calendar
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MedicationListScreen(
     medicationsWithAlarms: List<MedicationWithAlarms>,
+    pendingSnoozes: List<DoseHistory> = emptyList(),
     onAddClick: () -> Unit,
     onMedicationClick: (Long) -> Unit,
     onDeleteClick: (MedicationWithAlarms) -> Unit,
     onSettingsClick: () -> Unit = {},
-    onHistoryClick: () -> Unit = {}
+    onHistoryClick: () -> Unit = {},
+    onConfirmSnooze: (DoseHistory) -> Unit = {}
 ) {
     var showDeleteDialog by remember { mutableStateOf<MedicationWithAlarms?>(null) }
 
@@ -96,6 +100,20 @@ fun MedicationListScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // Cards de soneca pendente
+                if (pendingSnoozes.isNotEmpty()) {
+                    items(pendingSnoozes, key = { "snooze_${it.id}" }) { snooze ->
+                        PendingSnoozeCard(
+                            dose = snooze,
+                            onConfirm = { onConfirmSnooze(snooze) }
+                        )
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                }
+
                 // Card de próximo alarme
                 val nextAlarm = findNextAlarm(medicationsWithAlarms)
                 if (nextAlarm != null) {
@@ -139,6 +157,59 @@ fun MedicationListScreen(
                     }
                 }
             )
+        }
+    }
+}
+
+@Composable
+fun PendingSnoozeCard(
+    dose: DoseHistory,
+    onConfirm: () -> Unit
+) {
+    val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+    val snoozeTime = if (dose.snoozedTo != null) {
+        timeFormat.format(Date(dose.snoozedTo))
+    } else "?"
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "⏰ Soneca pendente",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = dose.medicationName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+                Text(
+                    text = "Alarme às $snoozeTime",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+            }
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Text("✅ Já Tomei!")
+            }
         }
     }
 }
@@ -305,6 +376,17 @@ fun MedicationListScreenPreview() {
             MedicationWithAlarms(
                 medication = Medication(id = 3, name = "Omega 3", dosage = "1g"),
                 alarms = emptyList()
+            )
+        ),
+        pendingSnoozes = listOf(
+            DoseHistory(
+                id = 10,
+                medicationId = 1,
+                medicationName = "Losartana",
+                scheduledHour = 8,
+                scheduledMinute = 0,
+                status = "SNOOZED",
+                snoozedTo = System.currentTimeMillis() + 180000
             )
         ),
         onAddClick = {},

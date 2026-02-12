@@ -35,6 +35,7 @@ class AlarmActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "AlarmActivity"
+        const val SNOOZE_MINUTES = 5
     }
 
     private var mediaPlayer: MediaPlayer? = null
@@ -43,7 +44,6 @@ class AlarmActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Configurar para aparecer sobre lock screen
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -69,7 +69,6 @@ class AlarmActivity : ComponentActivity() {
         Log.d(TAG, "=== AlarmActivity aberta ===")
         Log.d(TAG, "alarmId=$alarmId, medicationId=$medicationId, name=$medicationName, hour=$hour, minute=$minute")
 
-        // Iniciar som e vibração IMEDIATAMENTE (antes do Compose inflar)
         startAlarmSound()
         startVibration()
 
@@ -79,57 +78,128 @@ class AlarmActivity : ComponentActivity() {
                     medicationName = medicationName,
                     hour = hour,
                     minute = minute,
+                    snoozeMinutes = SNOOZE_MINUTES,
                     onDismiss = {
-                        // Parar som e vibração imediatamente
-                        stopAlarmSoundAndVibration()
-
-                        // Parar o Service também (caso esteja rodando)
-                        val serviceIntent = Intent(this@AlarmActivity, AlarmService::class.java)
-                        stopService(serviceIntent)
-
-                        // Gravar no banco e depois fechar
-                        CoroutineScope(Dispatchers.IO).launch {
-                            try {
-                                Log.d(TAG, "Gravando dose: medicationId=$medicationId, name=$medicationName")
-
-                                val db = AppDatabase.getInstance(applicationContext)
-
-                                // Buscar o medicationId real pelo alarmId caso venha -1
-                                var finalMedicationId = medicationId
-                                if (finalMedicationId <= 0 && alarmId > 0) {
-                                    Log.d(TAG, "medicationId inválido, buscando pelo alarmId=$alarmId")
-                                    val alarm = db.alarmScheduleDao().getById(alarmId)
-                                    if (alarm != null) {
-                                        finalMedicationId = alarm.medicationId
-                                        Log.d(TAG, "medicationId encontrado via alarm: $finalMedicationId")
-                                    }
-                                }
-
-                                if (finalMedicationId > 0) {
-                                    val id = db.doseHistoryDao().insert(
-                                        DoseHistory(
-                                            medicationId = finalMedicationId,
-                                            medicationName = medicationName,
-                                            scheduledHour = hour,
-                                            scheduledMinute = minute,
-                                            status = "TAKEN"
-                                        )
-                                    )
-                                    Log.d(TAG, "Dose gravada com sucesso! id=$id")
-                                } else {
-                                    Log.e(TAG, "ERRO: medicationId inválido mesmo após busca: $finalMedicationId")
-                                }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "ERRO ao gravar dose: ${e.message}")
-                                e.printStackTrace()
-                            } finally {
-                                runOnUiThread { finish() }
-                            }
-                        }
+                        handleDismiss(alarmId, medicationId, medicationName, hour, minute)
+                    },
+                    onSnooze = {
+                        handleSnooze(alarmId, medicationId, medicationName, hour, minute)
                     }
                 )
             }
         }
+    }
+
+    private fun handleDismiss(
+        alarmId: Long,
+        medicationId: Long,
+        medicationName: String,
+        hour: Int,
+        minute: Int
+    ) {
+        stopAlarmSoundAndVibration()
+
+        val serviceIntent = Intent(this@AlarmActivity, AlarmService::class.java)
+        stopService(serviceIntent)
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val db = AppDatabase.getInstance(applicationContext)
+                val finalMedicationId = resolveMedicationId(db, medicationId, alarmId)
+
+                if (finalMedicationId > 0) {
+                    val id = db.doseHistoryDao().insert(
+                        DoseHistory(
+                            medicationId = finalMedicationId,
+                            medicationName = medicationName,
+                            scheduledHour = hour,
+                            scheduledMinute = minute,
+                            status = "TAKEN"
+                        )
+                    )
+                    Log.d(TAG, "Dose gravada como TAKEN! id=$id")
+                } else {
+                    Log.e(TAG, "ERRO: medicationId inválido: $finalMedicationId")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "ERRO ao gravar dose: ${e.message}")
+                e.printStackTrace()
+            } finally {
+                runOnUiThread { finish() }
+            }
+        }
+    }
+
+    private fun handleSnooze(
+        alarmId: Long,
+        medicationId: Long,
+        medicationName: String,
+        hour: Int,
+        minute: Int
+    ) {
+        stopAlarmSoundAndVibration()
+
+        val serviceIntent = Intent(this@AlarmActivity, AlarmService::class.java)
+        stopService(serviceIntent)
+
+        val snoozeTime = System.currentTimeMillis() + (SNOOZE_MINUTES * 60 * 1000L)
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val db = AppDatabase.getInstance(applicationContext)
+                val finalMedicationId = resolveMedicationId(db, medicationId, alarmId)
+
+                if (finalMedicationId > 0) {
+                    val id = db.doseHistoryDao().insert(
+                        DoseHistory(
+                            medicationId = finalMedicationId,
+                            medicationName = medicationName,
+                            scheduledHour = hour,
+                            scheduledMinute = minute,
+                            status = "SNOOZED",
+                            snoozedTo = snoozeTime
+                        )
+                    )
+                    Log.d(TAG, "Dose gravada como SNOOZED! id=$id, soneca para ${java.util.Date(snoozeTime)}")
+                }
+
+                AlarmScheduler.scheduleSnooze(
+                    context = applicationContext,
+                    alarmId = alarmId,
+                    medicationId = if (finalMedicationId > 0) finalMedicationId else medicationId,
+                    medicationName = medicationName,
+                    originalHour = hour,
+                    originalMinute = minute,
+                    minutes = SNOOZE_MINUTES
+                )
+
+                Log.d(TAG, "Soneca agendada para $SNOOZE_MINUTES minutos")
+            } catch (e: Exception) {
+                Log.e(TAG, "ERRO ao agendar soneca: ${e.message}")
+                e.printStackTrace()
+            } finally {
+                runOnUiThread { finish() }
+            }
+        }
+    }
+
+    private suspend fun resolveMedicationId(
+        db: AppDatabase,
+        medicationId: Long,
+        alarmId: Long
+    ): Long {
+        if (medicationId > 0) return medicationId
+
+        if (alarmId > 0) {
+            Log.d(TAG, "medicationId inválido, buscando pelo alarmId=$alarmId")
+            val alarm = db.alarmScheduleDao().getById(alarmId)
+            if (alarm != null) {
+                Log.d(TAG, "medicationId encontrado via alarm: ${alarm.medicationId}")
+                return alarm.medicationId
+            }
+        }
+
+        return -1
     }
 
     private fun startAlarmSound() {
@@ -204,7 +274,9 @@ fun AlarmScreen(
     medicationName: String,
     hour: Int,
     minute: Int,
-    onDismiss: () -> Unit
+    snoozeMinutes: Int,
+    onDismiss: () -> Unit,
+    onSnooze: () -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -265,6 +337,21 @@ fun AlarmScreen(
                     text = "✅ Já Tomei!",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedButton(
+                onClick = onSnooze,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+            ) {
+                Text(
+                    text = "⏰ Lembrar em $snoozeMinutes min",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium
                 )
             }
         }

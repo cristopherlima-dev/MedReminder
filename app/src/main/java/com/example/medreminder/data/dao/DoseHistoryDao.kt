@@ -26,11 +26,17 @@ interface DoseHistoryDao {
     suspend fun deleteAll()
 
     /**
-     * Busca sonecas pendentes: status SNOOZED com snoozedTo no futuro.
+     * Busca sonecas pendentes (Flow): status SNOOZED com snoozedTo no futuro.
      * Usado para mostrar na lista de medicamentos o botão "Já Tomei" antecipado.
      */
     @Query("SELECT * FROM dose_history WHERE status = 'SNOOZED' AND snoozedTo > :now ORDER BY snoozedTo ASC")
     fun getPendingSnoozes(now: Long): Flow<List<DoseHistory>>
+
+    /**
+     * Busca sonecas pendentes (suspend): usado pelo BootReceiver para reagendar após reinicialização.
+     */
+    @Query("SELECT * FROM dose_history WHERE status = 'SNOOZED' AND snoozedTo > :now ORDER BY snoozedTo ASC")
+    suspend fun getPendingSnoozesOneShot(now: Long): List<DoseHistory>
 
     /**
      * Atualiza o status de uma dose (ex: SNOOZED → TAKEN quando o usuário toma antes da soneca).

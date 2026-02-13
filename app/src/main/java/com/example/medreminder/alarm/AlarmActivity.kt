@@ -24,10 +24,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.lifecycleScope
 import com.example.medreminder.data.AppDatabase
 import com.example.medreminder.data.entity.DoseHistory
 import com.example.medreminder.ui.theme.MedReminderTheme
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -102,7 +102,7 @@ class AlarmActivity : ComponentActivity() {
         val serviceIntent = Intent(this@AlarmActivity, AlarmService::class.java)
         stopService(serviceIntent)
 
-        CoroutineScope(Dispatchers.IO).launch {
+        lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val db = AppDatabase.getInstance(applicationContext)
                 val finalMedicationId = resolveMedicationId(db, medicationId, alarmId)
@@ -144,7 +144,7 @@ class AlarmActivity : ComponentActivity() {
 
         val snoozeTime = System.currentTimeMillis() + (SNOOZE_MINUTES * 60 * 1000L)
 
-        CoroutineScope(Dispatchers.IO).launch {
+        lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val db = AppDatabase.getInstance(applicationContext)
                 val finalMedicationId = resolveMedicationId(db, medicationId, alarmId)

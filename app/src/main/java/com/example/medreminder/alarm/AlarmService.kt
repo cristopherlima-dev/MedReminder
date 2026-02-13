@@ -35,22 +35,18 @@ class AlarmService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val alarmId = intent?.getLongExtra("ALARM_ID", -1) ?: -1
+        val medicationId = intent?.getLongExtra("MEDICATION_ID", -1) ?: -1
         val medicationName = intent?.getStringExtra("MEDICATION_NAME") ?: "Medicamento"
         val hour = intent?.getIntExtra("HOUR", 0) ?: 0
         val minute = intent?.getIntExtra("MINUTE", 0) ?: 0
 
-        Log.d(TAG, "Service iniciado (backup) para: $medicationName às %02d:%02d".format(hour, minute))
+        Log.d(TAG, "Service iniciado (backup) para: $medicationName às %02d:%02d, medId=$medicationId".format(hour, minute))
 
-        // Criar notificação (necessário para startForeground)
-        // Funciona como fallback caso a AlarmActivity não consiga abrir
-        val notification = createAlarmNotification(medicationName, hour, minute, alarmId)
+        val notification = createAlarmNotification(medicationName, hour, minute, alarmId, medicationId)
         startForeground(NOTIFICATION_ID, notification)
 
-        // Reagendar para amanhã
         rescheduleForTomorrow(alarmId)
 
-        // O Service não toca som/vibração — a AlarmActivity cuida disso
-        // Parar o Service após 30 segundos se ninguém o parar antes
         serviceScope.launch {
             kotlinx.coroutines.delay(30_000)
             Log.d(TAG, "Service auto-stop após 30s")
@@ -68,8 +64,8 @@ class AlarmService : Service() {
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Notificações de alarme de medicamentos"
-                enableVibration(false) // Vibração controlada pela Activity
-                setSound(null, null)   // Som controlado pela Activity
+                enableVibration(false)
+                setSound(null, null)
                 setBypassDnd(true)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
@@ -83,10 +79,12 @@ class AlarmService : Service() {
         medicationName: String,
         hour: Int,
         minute: Int,
-        alarmId: Long
+        alarmId: Long,
+        medicationId: Long
     ): Notification {
         val fullScreenIntent = Intent(this, AlarmActivity::class.java).apply {
             putExtra("ALARM_ID", alarmId)
+            putExtra("MEDICATION_ID", medicationId)
             putExtra("MEDICATION_NAME", medicationName)
             putExtra("HOUR", hour)
             putExtra("MINUTE", minute)

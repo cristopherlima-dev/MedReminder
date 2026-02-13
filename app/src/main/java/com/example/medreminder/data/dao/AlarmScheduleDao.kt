@@ -19,6 +19,12 @@ interface AlarmScheduleDao {
     @Query("SELECT * FROM alarm_schedules WHERE medicationId = :medicationId ORDER BY hour, minute")
     fun getByMedication(medicationId: Long): Flow<List<AlarmSchedule>>
 
+    /**
+     * Versão suspend (não-Flow) para uso em contextos como BootReceiver.
+     */
+    @Query("SELECT * FROM alarm_schedules WHERE medicationId = :medicationId ORDER BY hour, minute")
+    suspend fun getByMedicationOneShot(medicationId: Long): List<AlarmSchedule>
+
     @Query("SELECT * FROM alarm_schedules WHERE id = :id")
     suspend fun getById(id: Long): AlarmSchedule?
 

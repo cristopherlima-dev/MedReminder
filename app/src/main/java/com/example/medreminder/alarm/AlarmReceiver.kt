@@ -18,17 +18,18 @@ class AlarmReceiver : BroadcastReceiver() {
         val medicationName = intent.getStringExtra("MEDICATION_NAME") ?: "Medicamento"
         val hour = intent.getIntExtra("HOUR", 0)
         val minute = intent.getIntExtra("MINUTE", 0)
+        val snoozeCount = intent.getIntExtra("SNOOZE_COUNT", 0)
 
-        Log.d(TAG, "Alarme recebido: $alarmId - $medicationName às %02d:%02d".format(hour, minute))
+        Log.d(TAG, "Alarme recebido: $alarmId - $medicationName às %02d:%02d (snoozeCount=$snoozeCount)".format(hour, minute))
 
         // 1. Abrir Activity fullscreen IMEDIATAMENTE
-        //    A Activity agora é responsável por tocar som e vibrar
         val activityIntent = Intent(context, AlarmActivity::class.java).apply {
             putExtra("ALARM_ID", alarmId)
             putExtra("MEDICATION_ID", medicationId)
             putExtra("MEDICATION_NAME", medicationName)
             putExtra("HOUR", hour)
             putExtra("MINUTE", minute)
+            putExtra("SNOOZE_COUNT", snoozeCount)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
                     Intent.FLAG_ACTIVITY_NO_USER_ACTION
@@ -36,14 +37,13 @@ class AlarmReceiver : BroadcastReceiver() {
         context.startActivity(activityIntent)
 
         // 2. Iniciar o ForegroundService como BACKUP
-        //    Serve apenas para: notificação fullscreen (caso Activity não abra)
-        //    e reagendamento do próximo dia
         val serviceIntent = Intent(context, AlarmService::class.java).apply {
             putExtra("ALARM_ID", alarmId)
             putExtra("MEDICATION_ID", medicationId)
             putExtra("MEDICATION_NAME", medicationName)
             putExtra("HOUR", hour)
             putExtra("MINUTE", minute)
+            putExtra("SNOOZE_COUNT", snoozeCount)
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

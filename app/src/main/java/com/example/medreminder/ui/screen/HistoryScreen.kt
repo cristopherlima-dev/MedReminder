@@ -168,6 +168,7 @@ fun DoseHistoryCard(dose: DoseHistory) {
         "TAKEN" -> "✅"
         "MISSED" -> "❌"
         "SNOOZED" -> "⏰"
+        "DISMISSED" -> "🚫"
         else -> "❓"
     }
 
@@ -182,7 +183,16 @@ fun DoseHistoryCard(dose: DoseHistory) {
                 "Adiou"
             }
         }
+        "DISMISSED" -> "Optou por não tomar"
         else -> dose.status
+    }
+
+    val statusColor = when (dose.status) {
+        "TAKEN" -> MaterialTheme.colorScheme.primary
+        "SNOOZED" -> MaterialTheme.colorScheme.tertiary
+        "MISSED" -> MaterialTheme.colorScheme.error
+        "DISMISSED" -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
     Card(
@@ -225,12 +235,7 @@ fun DoseHistoryCard(dose: DoseHistory) {
                 Text(
                     text = statusText,
                     style = MaterialTheme.typography.bodySmall,
-                    color = when (dose.status) {
-                        "TAKEN" -> MaterialTheme.colorScheme.primary
-                        "SNOOZED" -> MaterialTheme.colorScheme.tertiary
-                        "MISSED" -> MaterialTheme.colorScheme.error
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    }
+                    color = statusColor
                 )
             }
         }
@@ -249,7 +254,8 @@ fun HistoryScreenPreview() {
             DoseHistory(id = 1, medicationId = 1, medicationName = "Losartana", scheduledHour = 8, scheduledMinute = 0, takenAt = now - 3600000, status = "TAKEN"),
             DoseHistory(id = 2, medicationId = 2, medicationName = "Vitamina D", scheduledHour = 12, scheduledMinute = 0, takenAt = now - 1800000, status = "SNOOZED", snoozedTo = now - 1500000),
             DoseHistory(id = 3, medicationId = 1, medicationName = "Losartana", scheduledHour = 20, scheduledMinute = 0, takenAt = now - 86400000, status = "TAKEN"),
-            DoseHistory(id = 4, medicationId = 3, medicationName = "Omega 3", scheduledHour = 14, scheduledMinute = 30, takenAt = now - 86400000, status = "MISSED")
+            DoseHistory(id = 4, medicationId = 3, medicationName = "Omega 3", scheduledHour = 14, scheduledMinute = 30, takenAt = now - 86400000, status = "MISSED"),
+            DoseHistory(id = 5, medicationId = 3, medicationName = "Omega 3", scheduledHour = 23, scheduledMinute = 0, takenAt = now - 80000000, status = "DISMISSED")
         ),
         onNavigateBack = {}
     )

@@ -32,6 +32,7 @@ object AlarmScheduler {
             putExtra("MEDICATION_NAME", medicationName)
             putExtra("HOUR", alarm.hour)
             putExtra("MINUTE", alarm.minute)
+            putExtra("SNOOZE_COUNT", 0)
         }
 
         val pendingIntent = PendingIntent.getBroadcast(
@@ -90,6 +91,7 @@ object AlarmScheduler {
             putExtra("MEDICATION_NAME", medicationName)
             putExtra("HOUR", alarm.hour)
             putExtra("MINUTE", alarm.minute)
+            putExtra("SNOOZE_COUNT", 0)
         }
 
         val pendingIntent = PendingIntent.getBroadcast(
@@ -128,7 +130,8 @@ object AlarmScheduler {
         medicationName: String,
         originalHour: Int,
         originalMinute: Int,
-        minutes: Int = 5
+        minutes: Int = 5,
+        snoozeCount: Int = 0
     ) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
@@ -146,6 +149,7 @@ object AlarmScheduler {
             putExtra("HOUR", originalHour)
             putExtra("MINUTE", originalMinute)
             putExtra("IS_SNOOZE", true)
+            putExtra("SNOOZE_COUNT", snoozeCount)
         }
 
         val snoozeRequestCode = SNOOZE_REQUEST_CODE_BASE + alarmId.toInt()
@@ -166,7 +170,7 @@ object AlarmScheduler {
 
         alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
 
-        Log.d(TAG, "Soneca agendada: alarmId=$alarmId - $medicationName para daqui $minutes minutos")
+        Log.d(TAG, "Soneca agendada: alarmId=$alarmId - $medicationName para daqui $minutes minutos (soneca $snoozeCount)")
     }
 
     /**

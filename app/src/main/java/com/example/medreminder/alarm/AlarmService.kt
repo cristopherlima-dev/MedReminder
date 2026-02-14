@@ -39,10 +39,11 @@ class AlarmService : Service() {
         val medicationName = intent?.getStringExtra("MEDICATION_NAME") ?: "Medicamento"
         val hour = intent?.getIntExtra("HOUR", 0) ?: 0
         val minute = intent?.getIntExtra("MINUTE", 0) ?: 0
+        val snoozeCount = intent?.getIntExtra("SNOOZE_COUNT", 0) ?: 0
 
-        Log.d(TAG, "Service iniciado (backup) para: $medicationName às %02d:%02d, medId=$medicationId".format(hour, minute))
+        Log.d(TAG, "Service iniciado (backup) para: $medicationName às %02d:%02d, medId=$medicationId, snoozeCount=$snoozeCount".format(hour, minute))
 
-        val notification = createAlarmNotification(medicationName, hour, minute, alarmId, medicationId)
+        val notification = createAlarmNotification(medicationName, hour, minute, alarmId, medicationId, snoozeCount)
         startForeground(NOTIFICATION_ID, notification)
 
         rescheduleForTomorrow(alarmId)
@@ -80,7 +81,8 @@ class AlarmService : Service() {
         hour: Int,
         minute: Int,
         alarmId: Long,
-        medicationId: Long
+        medicationId: Long,
+        snoozeCount: Int
     ): Notification {
         val fullScreenIntent = Intent(this, AlarmActivity::class.java).apply {
             putExtra("ALARM_ID", alarmId)
@@ -88,6 +90,7 @@ class AlarmService : Service() {
             putExtra("MEDICATION_NAME", medicationName)
             putExtra("HOUR", hour)
             putExtra("MINUTE", minute)
+            putExtra("SNOOZE_COUNT", snoozeCount)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
 

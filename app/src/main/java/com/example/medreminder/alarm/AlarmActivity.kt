@@ -29,6 +29,7 @@ import com.example.medreminder.data.AppDatabase
 import com.example.medreminder.data.entity.DoseHistory
 import com.example.medreminder.ui.theme.MedReminderTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class AlarmActivity : ComponentActivity() {
@@ -36,10 +37,13 @@ class AlarmActivity : ComponentActivity() {
     companion object {
         private const val TAG = "AlarmActivity"
         const val SNOOZE_MINUTES = 5
+        const val MAX_SNOOZES = 4
+        const val MISSED_TIMEOUT_MS = 3 * 60 * 1000L // 3 minutos
     }
 
     private var mediaPlayer: MediaPlayer? = null
     private var vibrator: Vibrator? = null
+    private var isHandled = false // Flag para evitar duplo registro
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,12 +69,22 @@ class AlarmActivity : ComponentActivity() {
         val medicationName = intent.getStringExtra("MEDICATION_NAME") ?: "Medicamento"
         val hour = intent.getIntExtra("HOUR", 0)
         val minute = intent.getIntExtra("MINUTE", 0)
+        val snoozeCount = intent.getIntExtra("SNOOZE_COUNT", 0)
 
         Log.d(TAG, "=== AlarmActivity aberta ===")
-        Log.d(TAG, "alarmId=$alarmId, medicationId=$medicationId, name=$medicationName, hour=$hour, minute=$minute")
+        Log.d(TAG, "alarmId=$alarmId, medicationId=$medicationId, name=$medicationName, hour=$hour, minute=$minute, snoozeCount=$snoozeCount")
 
         startAlarmSound()
         startVibration()
+
+        // Timeout de 3 minutos — registra como MISSED se ninguém interagir
+        lifecycleScope.launch {
+            delay(MISSED_TIMEOUT_MS)
+            if (!isHandled) {
+                Log.d(TAG, "Timeout de ${MISSED_TIMEOUT_MS / 1000}s atingido — registrando como MISSED")
+                handleMissed(alarmId, medicationId, medicationName, hour, minute)
+            }
+        }
 
         setContent {
             MedReminderTheme {
@@ -79,11 +93,16 @@ class AlarmActivity : ComponentActivity() {
                     hour = hour,
                     minute = minute,
                     snoozeMinutes = SNOOZE_MINUTES,
+                    snoozeCount = snoozeCount,
+                    maxSnoozes = MAX_SNOOZES,
                     onDismiss = {
                         handleDismiss(alarmId, medicationId, medicationName, hour, minute)
                     },
                     onSnooze = {
-                        handleSnooze(alarmId, medicationId, medicationName, hour, minute)
+                        handleSnooze(alarmId, medicationId, medicationName, hour, minute, snoozeCount)
+                    },
+                    onDismissIgnore = {
+                        handleDismissIgnore(alarmId, medicationId, medicationName, hour, minute)
                     }
                 )
             }
@@ -97,6 +116,9 @@ class AlarmActivity : ComponentActivity() {
         hour: Int,
         minute: Int
     ) {
+        if (isHandled) return
+        isHandled = true
+
         stopAlarmSoundAndVibration()
 
         val serviceIntent = Intent(this@AlarmActivity, AlarmService::class.java)
@@ -135,14 +157,19 @@ class AlarmActivity : ComponentActivity() {
         medicationId: Long,
         medicationName: String,
         hour: Int,
-        minute: Int
+        minute: Int,
+        snoozeCount: Int
     ) {
+        if (isHandled) return
+        isHandled = true
+
         stopAlarmSoundAndVibration()
 
         val serviceIntent = Intent(this@AlarmActivity, AlarmService::class.java)
         stopService(serviceIntent)
 
         val snoozeTime = System.currentTimeMillis() + (SNOOZE_MINUTES * 60 * 1000L)
+        val newSnoozeCount = snoozeCount + 1
 
         lifecycleScope.launch(Dispatchers.IO) {
             try {
@@ -160,7 +187,7 @@ class AlarmActivity : ComponentActivity() {
                             snoozedTo = snoozeTime
                         )
                     )
-                    Log.d(TAG, "Dose gravada como SNOOZED! id=$id, soneca para ${java.util.Date(snoozeTime)}")
+                    Log.d(TAG, "Dose gravada como SNOOZED! id=$id, soneca $newSnoozeCount/$MAX_SNOOZES")
                 }
 
                 AlarmScheduler.scheduleSnooze(
@@ -170,12 +197,99 @@ class AlarmActivity : ComponentActivity() {
                     medicationName = medicationName,
                     originalHour = hour,
                     originalMinute = minute,
-                    minutes = SNOOZE_MINUTES
+                    minutes = SNOOZE_MINUTES,
+                    snoozeCount = newSnoozeCount
                 )
 
-                Log.d(TAG, "Soneca agendada para $SNOOZE_MINUTES minutos")
+                Log.d(TAG, "Soneca agendada para $SNOOZE_MINUTES minutos (soneca $newSnoozeCount/$MAX_SNOOZES)")
             } catch (e: Exception) {
                 Log.e(TAG, "ERRO ao agendar soneca: ${e.message}")
+                e.printStackTrace()
+            } finally {
+                runOnUiThread { finish() }
+            }
+        }
+    }
+
+    private fun handleDismissIgnore(
+        alarmId: Long,
+        medicationId: Long,
+        medicationName: String,
+        hour: Int,
+        minute: Int
+    ) {
+        if (isHandled) return
+        isHandled = true
+
+        stopAlarmSoundAndVibration()
+
+        val serviceIntent = Intent(this@AlarmActivity, AlarmService::class.java)
+        stopService(serviceIntent)
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val db = AppDatabase.getInstance(applicationContext)
+                val finalMedicationId = resolveMedicationId(db, medicationId, alarmId)
+
+                if (finalMedicationId > 0) {
+                    val id = db.doseHistoryDao().insert(
+                        DoseHistory(
+                            medicationId = finalMedicationId,
+                            medicationName = medicationName,
+                            scheduledHour = hour,
+                            scheduledMinute = minute,
+                            status = "DISMISSED"
+                        )
+                    )
+                    Log.d(TAG, "Dose gravada como DISMISSED (usuário optou por não tomar)! id=$id")
+                } else {
+                    Log.e(TAG, "ERRO: medicationId inválido: $finalMedicationId")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "ERRO ao gravar dose: ${e.message}")
+                e.printStackTrace()
+            } finally {
+                runOnUiThread { finish() }
+            }
+        }
+    }
+
+    private fun handleMissed(
+        alarmId: Long,
+        medicationId: Long,
+        medicationName: String,
+        hour: Int,
+        minute: Int
+    ) {
+        if (isHandled) return
+        isHandled = true
+
+        stopAlarmSoundAndVibration()
+
+        val serviceIntent = Intent(this@AlarmActivity, AlarmService::class.java)
+        stopService(serviceIntent)
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val db = AppDatabase.getInstance(applicationContext)
+                val finalMedicationId = resolveMedicationId(db, medicationId, alarmId)
+
+                if (finalMedicationId > 0) {
+                    val id = db.doseHistoryDao().insert(
+                        DoseHistory(
+                            medicationId = finalMedicationId,
+                            medicationName = medicationName,
+                            scheduledHour = hour,
+                            scheduledMinute = minute,
+                            status = "MISSED"
+                        )
+                    )
+                    Log.d(TAG, "Dose gravada como MISSED (timeout)! id=$id")
+                } else {
+                    Log.e(TAG, "ERRO: medicationId inválido: $finalMedicationId")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "ERRO ao gravar dose: ${e.message}")
                 e.printStackTrace()
             } finally {
                 runOnUiThread { finish() }
@@ -262,10 +376,7 @@ class AlarmActivity : ComponentActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        stopAlarmSoundAndVibration()
-        val serviceIntent = Intent(this, AlarmService::class.java)
-        stopService(serviceIntent)
-        finish()
+        // Back press não faz nada — usuário deve escolher uma opção
     }
 }
 
@@ -275,9 +386,14 @@ fun AlarmScreen(
     hour: Int,
     minute: Int,
     snoozeMinutes: Int,
+    snoozeCount: Int,
+    maxSnoozes: Int,
     onDismiss: () -> Unit,
-    onSnooze: () -> Unit
+    onSnooze: () -> Unit,
+    onDismissIgnore: () -> Unit
 ) {
+    val canSnooze = snoozeCount < maxSnoozes
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.primaryContainer
@@ -322,8 +438,20 @@ fun AlarmScreen(
                 textAlign = TextAlign.Center
             )
 
+            // Indicador de soneca (se já usou alguma)
+            if (snoozeCount > 0) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "⏰ Soneca $snoozeCount/$maxSnoozes",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
             Spacer(modifier = Modifier.height(48.dp))
 
+            // Botão "Já Tomei!"
             Button(
                 onClick = onDismiss,
                 modifier = Modifier
@@ -342,16 +470,49 @@ fun AlarmScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            OutlinedButton(
-                onClick = onSnooze,
+            // Botão "Soneca" (desabilitado se atingiu o limite)
+            if (canSnooze) {
+                OutlinedButton(
+                    onClick = onSnooze,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                ) {
+                    Text(
+                        text = "⏰ Lembrar em $snoozeMinutes min (${snoozeCount + 1}/$maxSnoozes)",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            } else {
+                OutlinedButton(
+                    onClick = {},
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    enabled = false
+                ) {
+                    Text(
+                        text = "⏰ Limite de sonecas atingido",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Botão "Não me incomode"
+            TextButton(
+                onClick = onDismissIgnore,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
+                    .height(48.dp)
             ) {
                 Text(
-                    text = "⏰ Lembrar em $snoozeMinutes min",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium
+                    text = "🚫 Não me incomode",
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.error
                 )
             }
         }
